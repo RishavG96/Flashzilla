@@ -8,6 +8,14 @@
 import CoreHaptics
 import SwiftUI
 
+func withOptionalAnimation<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
+    if UIAccessibility.isReduceMotionEnabled {
+        return try body()
+    } else {
+        return try withAnimation(animation, body)
+    }
+}
+
 struct ContentView: View {
     @State private var currentAmount = Angle.zero //0.0
     @State private var finalAmount = Angle.zero //1.0
@@ -16,6 +24,17 @@ struct ContentView: View {
     @State private var isDragging = false
     
     @State private var engine: CHHapticEngine?
+    
+    let timer = Timer.publish(every: 1, tolerance: 0.5, on: .main, in: .common).autoconnect()
+    @State private var counter = 0
+    
+    @Environment(\.scenePhase) var scenePhase
+    
+    @Environment(\.accessibilityDifferentiateWithoutColor) var differentiateWithoutColor
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) var reduceTransparancy
+    
+    @State private var scale = 1.0
     
     var body: some View {
         let dragGesture = DragGesture()
@@ -90,6 +109,12 @@ struct ContentView: View {
                 Text("hello")
                 Spacer().frame(height: 100)
                 Text("world")
+                    .scaleEffect(scale)
+                    .onTapGesture {
+                        withOptionalAnimation {
+                            scale *= 1.5
+                        }
+                    }
             }
             .contentShape(Rectangle()) // whole area becomes tappable
             .onTapGesture {
@@ -97,14 +122,30 @@ struct ContentView: View {
             }
 
         }
-        .padding()
+        .onReceive(timer) { time in
+            if counter == 5 {
+                timer.upstream.connect().cancel()
+            } else {
+                print("The time is now \(time)")
+            }
+            
+            counter += 1
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                print("Active")
+            } else if newPhase == .inactive {
+                print("Inactive")
+            } else if newPhase == .background {
+                print("Background")
+            }
+        }
 //        .highPriorityGesture(
         .simultaneousGesture(
             TapGesture()
                 .onEnded {
                     print("VStack Tapped")
                 }
-                
         )
     }
     
@@ -130,15 +171,15 @@ struct ContentView: View {
         var events = [CHHapticEvent]()
         
         for i in stride(from: 0, to: 1, by: 0.1) {
-            var intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(i))
-            var sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: Float(i))
+            let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(i))
+            let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: Float(i))
             let event = CHHapticEvent(eventType: .hapticTransient, parameters: [intensity, sharpness], relativeTime: i)
             events.append(event)
         }
         
         for i in stride(from: 0, to: 1, by: 0.1) {
-            var intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(1 - i))
-            var sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: Float(1 - i))
+            let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(1 - i))
+            let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: Float(1 - i))
             let event = CHHapticEvent(eventType: .hapticTransient, parameters: [intensity, sharpness], relativeTime: 1 + i)
             events.append(event)
         }
